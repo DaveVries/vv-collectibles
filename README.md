@@ -59,6 +59,13 @@ flow is testable locally:
 Set `NEXT_PUBLIC_SITE_URL` / `NEXTAUTH_URL` to your real domain in production (payment
 return URLs and invoice/label URLs are built from it).
 
+> **Do not bulk-import `.env.example` into a hosting dashboard.** Every key here has a
+> placeholder `""`, and an empty variable does not behave like an absent one. An empty
+> `NEXTAUTH_URL` fails the build outright (NextAuth parses it with `new URL()` at import
+> time); an empty `DATABASE_URL` deploys fine and then throws on the first query. Set only
+> the variables you have real values for, and **delete** the rest rather than leaving them
+> blank.
+
 ### Rabo OnlineKassa
 
 Rabo OnlineKassa is Rabobank's online gateway, formerly branded Rabo OmniKassa 2.0 and
