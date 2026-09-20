@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#131d33"/><stop offset="1" stop-color="#080e1a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1d27a"/><stop offset="0.5" stop-color="#d4af37"/><stop offset="1" stop-color="#a9821f"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="600" fill="url(#bg)"/>
+  <g fill="none" stroke="url(#gold)" stroke-width="3" stroke-linejoin="round" opacity="0.9" transform="translate(300,150) scale(0.9)">
+    <circle cx="0" cy="0" r="72" stroke-width="2" opacity="0.8"/>
+    <path d="M0 -52 L38 -14 L0 0 L-38 -14 Z"/>
+    <path d="M-38 -14 L0 52 L38 -14"/>
+    <path d="M0 0 L0 52"/>
+  </g>
+  <text x="300" y="300" text-anchor="middle" fill="#f3efe6" font-family="Arial, sans-serif" font-size="92" font-weight="800">SB01</text>
+  <text x="300" y="360" text-anchor="middle" fill="#d4af37" font-family="Arial, sans-serif" font-size="34" font-weight="700">Manga Booster 01</text>
+  <text x="300" y="410" text-anchor="middle" fill="#8a93a6" font-family="Arial, sans-serif" font-size="18" letter-spacing="3">DRAGON BALL SUPER · FUSION WORLD</text>
+  <text x="300" y="442" text-anchor="middle" fill="#6b7686" font-family="Arial, sans-serif" font-size="15" letter-spacing="2">MANGA BOOSTER DISPLAY</text>
+  <text x="300" y="556" text-anchor="middle" fill="#5a6473" font-family="Arial, sans-serif" font-size="14" letter-spacing="4">V&amp;V COLLECTIBLES</text>
+</svg>

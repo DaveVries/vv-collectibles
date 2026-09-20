@@ -1,0 +1,265 @@
+// V&V Collectibles — webshop + B2B distribution
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth / staff
+// ---------------------------------------------------------------------------
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         Role     @default(CUSTOMER)
+  phone        String?
+  // Saved shipping address for faster checkout
+  street       String?
+  houseNr      String?
+  zip          String?
+  city         String?
+  country      String   @default("NL")
+  createdAt    DateTime @default(now())
+
+  orders      Order[]
+  resetTokens PasswordResetToken[]
+  partner     Partner?
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------
+model Product {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  // Short blurb shown in cards; long body shown on detail page.
+  summary     String?
+  description String? @db.Text
+  category    String  @default("Sealed Product")
+  language    String  @default("Engels")
+  brand       String? // e.g. Pokémon, Bandai
+
+  priceCents      Int // base (consumer) price incl. VAT, in cents
+  compareAtCents  Int? // optional "was" price for strikethrough
+  currency        String @default("EUR")
+  vatRatePct      Int    @default(21)
+
+  images   String[] @default([])
+  stock    Int      @default(0)
+  soldOut  Boolean  @default(false)
+
+  // --- Pre-order fields (first-class, per the brief) ---
+  isPreorder       Boolean   @default(false)
+  releaseDate      DateTime? // announced release
+  expectedDelivery String? // free text, e.g. "rond januari 2027" — lead times shift
+  preorderNote     String?   @db.Text // the red alert text on the product page
+  nonCancellable   Boolean   @default(false)
+
+  // --- B2B ---
+  isCase   Boolean @default(false) // a sealed case (bulk unit)
+  caseSize Int? // units per case, if applicable
+  // Wholesale base price for partners (before tier/bulk discount). Null => derive from priceCents.
+  wholesaleCents Int?
+
+  active    Boolean  @default(true)
+  featured  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([active, category])
+}
+
+// ---------------------------------------------------------------------------
+// B2B partners (stores)
+// ---------------------------------------------------------------------------
+enum PartnerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PartnerTier {
+  STANDARD // approved store, base wholesale
+  PARTNER // better pricing
+  DISTRIBUTOR // best pricing
+}
+
+model Partner {
+  id          String        @id @default(cuid())
+  // Optional linked login account (matched by email on first portal access).
+  userId      String?       @unique
+  user        User?         @relation(fields: [userId], references: [id])
+  companyName String
+  contactName String
+  email       String        @unique
+  phone       String?
+  vatNumber   String?
+  website     String?
+  // address
+  street      String?
+  houseNr     String?
+  zip         String?
+  city        String?
+  country     String        @default("NL")
+  message     String?       @db.Text
+
+  status PartnerStatus @default(PENDING)
+  tier   PartnerTier   @default(STANDARD)
+  // Extra discount on top of wholesale, in percent (set by admin per partner).
+  discountPct Int @default(0)
+  // Quantity at/above which the bulk discount kicks in.
+  bulkThreshold Int @default(6)
+  // Additional discount when an order line meets the bulk threshold.
+  bulkDiscountPct Int @default(5)
+
+  notifyNewProducts Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+enum OrderStatus {
+  PENDING_PAYMENT
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  OPEN
+  PAID
+  FAILED
+  EXPIRED
+  CANCELED
+  REFUNDED
+}
+
+enum OrderChannel {
+  WEBSHOP // consumer
+  B2B // partner / distribution
+}
+
+model Order {
+  id     String @id @default(cuid())
+  number String @unique // e.g. VV-2026-0001
+
+  channel OrderChannel @default(WEBSHOP)
+
+  status        OrderStatus   @default(PENDING_PAYMENT)
+  paymentStatus PaymentStatus @default(OPEN)
+  paymentMethod String?
+  molliePaymentId String?
+
+  // customer
+  customerName  String
+  customerEmail String
+  customerPhone String?
+
+  // shipping address
+  shipStreet  String
+  shipHouseNr String
+  shipZip     String
+  shipCity    String
+  shipCountry String @default("NL")
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  partnerId String?
+  partner   Partner? @relation(fields: [partnerId], references: [id])
+
+  subtotalCents Int
+  shippingCents Int    @default(0)
+  totalCents    Int
+  currency      String @default("EUR")
+
+  // fulfilment
+  trackingNumber String?
+  trackingCarrier String? @default("PostNL")
+  labelBarcode   String?
+  labelUrl       String?
+  notes          String? @db.Text
+
+  hasPreorderItems Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  paidAt    DateTime?
+
+  items   OrderItem[]
+  invoice Invoice?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // snapshot fields (so the line survives product edits/deletes)
+  name             String
+  unitPriceCents   Int
+  quantity         Int    @default(1)
+  isPreorder       Boolean @default(false)
+  expectedDelivery String?
+
+  @@index([orderId])
+}
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+model Invoice {
+  id       String   @id @default(cuid())
+  number   String   @unique // INV-2026-0001
+  orderId  String   @unique
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  issuedAt DateTime @default(now())
+  totalCents Int
+  currency String   @default("EUR")
+  pdfPath  String? // relative path under /public/invoices
+
+  @@index([issuedAt])
+}
+
+// Simple global counters for human-friendly sequential numbers.
+model Counter {
+  key   String @id // e.g. "order-2026", "invoice-2026"
+  value Int    @default(0)
+}
