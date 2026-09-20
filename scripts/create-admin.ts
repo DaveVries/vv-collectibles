@@ -1,7 +1,9 @@
 /**
- * Creates or updates an admin user, interactively.
+ * Creates admin users.
  *
- *   npm run create:admin
+ *   npm run create:admin                          # interactive, one user
+ *   npm run create:admin -- a@x.com b@x.com       # batch, generated passwords
+ *   npm run create:admin -- --reset a@x.com       # also reset existing users
  *
  * Intended for production, where `npm run db:seed` must not be used: the seed
  * creates a well-known admin@vvcollectibles.nl / admin123 account, which on a
@@ -16,6 +18,7 @@
  *   read -rs "DATABASE_URL?Neon URL: " && export DATABASE_URL && npm run create:admin
  */
 import { createInterface } from "node:readline";
+import { randomInt } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -24,6 +27,94 @@ const prisma = new PrismaClient();
 /** bcrypt cost factor; matches prisma/seed.ts. */
 const BCRYPT_ROUNDS = 10;
 const MIN_PASSWORD_LENGTH = 12;
+const GENERATED_PASSWORD_LENGTH = 20;
+
+/**
+ * Alphabet for generated passwords, with the characters that get misread when
+ * a password is copied by hand removed: 0/O, 1/l/I.
+ */
+const PASSWORD_ALPHABET =
+  "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+/** Cryptographically random password. randomInt is unbiased, unlike % length. */
+function generatePassword(): string {
+  let out = "";
+  for (let i = 0; i < GENERATED_PASSWORD_LENGTH; i++) {
+    out += PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)];
+  }
+  return out;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Creates or updates one ADMIN user. Returns what happened, for reporting. */
+async function upsertAdmin(
+  rawEmail: string,
+  password: string,
+  name: string,
+): Promise<"created" | "updated"> {
+  // The login path looks users up by lowercased email, so store it that way.
+  const email = rawEmail.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+  await prisma.user.upsert({
+    where: { email },
+    update: { passwordHash, role: "ADMIN", name },
+    create: { email, name, passwordHash, role: "ADMIN" },
+  });
+
+  return existing ? "updated" : "created";
+}
+
+/**
+ * Batch mode: one ADMIN per address, each with a generated password.
+ *
+ * Existing users are skipped unless --reset is passed, so running this again
+ * cannot silently change a colleague's password out from under them.
+ */
+async function runBatch(emails: string[], reset: boolean) {
+  const invalid = emails.filter((e) => !EMAIL_RE.test(e));
+  if (invalid.length) {
+    throw new Error(`Not valid email addresses: ${invalid.join(", ")}`);
+  }
+
+  const results: { email: string; password: string; action: string }[] = [];
+
+  for (const raw of emails) {
+    const email = raw.toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email } });
+
+    if (existing && !reset) {
+      results.push({ email, password: "—", action: `exists (${existing.role}), skipped` });
+      continue;
+    }
+
+    const password = generatePassword();
+    // Derive a display name from the address: "daimian@x.com" -> "Daimian".
+    const local = email.split("@")[0];
+    const name = local.charAt(0).toUpperCase() + local.slice(1);
+    const action = await upsertAdmin(email, password, name);
+    results.push({ email, password, action: `${action} as ADMIN` });
+  }
+
+  const width = Math.max(...results.map((r) => r.email.length));
+  console.log("");
+  for (const r of results) {
+    console.log(`  ${r.email.padEnd(width)}  ${r.password.padEnd(GENERATED_PASSWORD_LENGTH)}  ${r.action}`);
+  }
+
+  const made = results.filter((r) => r.password !== "—");
+  if (made.length) {
+    console.log("\n  Sign in at /admin/login, then change these under /account.");
+    console.log("  Send each password over a private channel, not email or chat,");
+    console.log("  and clear your terminal scrollback afterwards.");
+  }
+  const skipped = results.filter((r) => r.password === "—");
+  if (skipped.length) {
+    console.log("\n  Re-run with --reset to set new passwords for skipped users.");
+  }
+}
 
 function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -87,6 +178,15 @@ async function main() {
   // Fail early with a clear message rather than a Prisma stack trace.
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not set (an empty value counts as unset).");
+  }
+
+  const args = process.argv.slice(2);
+  const reset = args.includes("--reset");
+  const emails = args.filter((a) => !a.startsWith("--"));
+
+  if (emails.length > 0) {
+    await runBatch(emails, reset);
+    return;
   }
 
   const rawEmail = await ask("Admin email: ");
