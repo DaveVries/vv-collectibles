@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
+import { putFile } from "@/lib/storage";
 
 /**
- * Admin image upload. Saves to /public/uploads and returns a public URL.
- *
- * NOTE: in production on an ephemeral filesystem (e.g. Vercel), files written
- * at runtime aren't persisted/served — swap this for object storage
- * (Vercel Blob / S3) before go-live. For local/dev this works as-is.
+ * Admin image upload. Stores via lib/storage — Vercel Blob in production,
+ * local public/uploads in development — and returns the public URL.
  */
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 const EXT: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -51,11 +46,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Bestand te groot (max 8 MB)" }, { status: 400 });
   }
 
-  if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-  const fileName = `${randomUUID()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-  fs.writeFileSync(path.join(UPLOAD_DIR, fileName), buffer);
 
-  return NextResponse.json({ url: `/uploads/${fileName}` });
+  try {
+    const url = await putFile(`uploads/${randomUUID()}.${ext}`, buffer, file.type);
+    return NextResponse.json({ url });
+  } catch (e) {
+    console.error("upload error", e);
+    return NextResponse.json(
+      { error: "Uploaden mislukt. Probeer het opnieuw." },
+      { status: 500 },
+    );
+  }
 }

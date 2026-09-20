@@ -63,14 +63,14 @@ model Product {
   language    String  @default("Engels")
   brand       String? // e.g. Pokémon, Bandai
 
-  priceCents      Int // base (consumer) price incl. VAT, in cents
-  compareAtCents  Int? // optional "was" price for strikethrough
-  currency        String @default("EUR")
-  vatRatePct      Int    @default(21)
+  priceCents     Int // base (consumer) price incl. VAT, in cents
+  compareAtCents Int? // optional "was" price for strikethrough
+  currency       String @default("EUR")
+  vatRatePct     Int    @default(21)
 
-  images   String[] @default([])
-  stock    Int      @default(0)
-  soldOut  Boolean  @default(false)
+  images  String[] @default([])
+  stock   Int      @default(0)
+  soldOut Boolean  @default(false)
 
   // --- Pre-order fields (first-class, per the brief) ---
   isPreorder       Boolean   @default(false)
@@ -80,8 +80,8 @@ model Product {
   nonCancellable   Boolean   @default(false)
 
   // --- B2B ---
-  isCase   Boolean @default(false) // a sealed case (bulk unit)
-  caseSize Int? // units per case, if applicable
+  isCase         Boolean @default(false) // a sealed case (bulk unit)
+  caseSize       Int? // units per case, if applicable
   // Wholesale base price for partners (before tier/bulk discount). Null => derive from priceCents.
   wholesaleCents Int?
 
@@ -111,13 +111,13 @@ enum PartnerTier {
 }
 
 model Partner {
-  id          String        @id @default(cuid())
+  id          String  @id @default(cuid())
   // Optional linked login account (matched by email on first portal access).
-  userId      String?       @unique
-  user        User?         @relation(fields: [userId], references: [id])
+  userId      String? @unique
+  user        User?   @relation(fields: [userId], references: [id])
   companyName String
   contactName String
-  email       String        @unique
+  email       String  @unique
   phone       String?
   vatNumber   String?
   website     String?
@@ -126,17 +126,17 @@ model Partner {
   houseNr     String?
   zip         String?
   city        String?
-  country     String        @default("NL")
-  message     String?       @db.Text
+  country     String  @default("NL")
+  message     String? @db.Text
 
-  status PartnerStatus @default(PENDING)
-  tier   PartnerTier   @default(STANDARD)
+  status          PartnerStatus @default(PENDING)
+  tier            PartnerTier   @default(STANDARD)
   // Extra discount on top of wholesale, in percent (set by admin per partner).
-  discountPct Int @default(0)
+  discountPct     Int           @default(0)
   // Quantity at/above which the bulk discount kicks in.
-  bulkThreshold Int @default(6)
+  bulkThreshold   Int           @default(6)
   // Additional discount when an order line meets the bulk threshold.
-  bulkDiscountPct Int @default(5)
+  bulkDiscountPct Int           @default(5)
 
   notifyNewProducts Boolean @default(true)
 
@@ -179,7 +179,8 @@ model Order {
   status        OrderStatus   @default(PENDING_PAYMENT)
   paymentStatus PaymentStatus @default(OPEN)
   paymentMethod String?
-  molliePaymentId String?
+  /// Rabo OnlineKassa omnikassaOrderId (or "stub_..." when running without credentials).
+  paymentRef    String?
 
   // customer
   customerName  String
@@ -205,11 +206,11 @@ model Order {
   currency      String @default("EUR")
 
   // fulfilment
-  trackingNumber String?
+  trackingNumber  String?
   trackingCarrier String? @default("PostNL")
-  labelBarcode   String?
-  labelUrl       String?
-  notes          String? @db.Text
+  labelBarcode    String?
+  labelUrl        String?
+  notes           String? @db.Text
 
   hasPreorderItems Boolean @default(false)
 
@@ -221,6 +222,7 @@ model Order {
   invoice Invoice?
 
   @@index([status])
+  @@index([paymentRef])
   @@index([createdAt])
 }
 
@@ -235,7 +237,7 @@ model OrderItem {
   // snapshot fields (so the line survives product edits/deletes)
   name             String
   unitPriceCents   Int
-  quantity         Int    @default(1)
+  quantity         Int     @default(1)
   isPreorder       Boolean @default(false)
   expectedDelivery String?
 
@@ -246,14 +248,14 @@ model OrderItem {
 // Invoices
 // ---------------------------------------------------------------------------
 model Invoice {
-  id       String   @id @default(cuid())
-  number   String   @unique // INV-2026-0001
-  orderId  String   @unique
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  issuedAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  number     String   @unique // INV-2026-0001
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  issuedAt   DateTime @default(now())
   totalCents Int
-  currency String   @default("EUR")
-  pdfPath  String? // relative path under /public/invoices
+  currency   String   @default("EUR")
+  pdfPath    String? // relative path under /public/invoices
 
   @@index([issuedAt])
 }

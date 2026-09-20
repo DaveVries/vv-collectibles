@@ -3,9 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { nextOrderNumber } from "@/lib/numbering";
-import { createPayment } from "@/lib/mollie";
-import { sendOrderConfirmation } from "@/lib/email";
-import { ensureInvoiceForOrder } from "@/lib/invoice";
+import { createPayment } from "@/lib/rabo";
+import { markOrderPaid } from "@/lib/order-finalize";
 
 const SHIPPING_CENTS = 695;
 
@@ -112,29 +111,37 @@ export async function POST(req: Request) {
   });
 
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const payment = await createPayment({
-    orderId: order.id,
-    orderNumber: order.number,
-    amountCents: totalCents,
-    description: `V&V Collectibles ${order.number}`,
-    redirectUrl: `${site}/checkout/success?order=${order.number}`,
-    webhookUrl: `${site}/api/webhooks/mollie`,
-  });
+
+  // Rabo's notification URL is configured once in the dashboard, so unlike
+  // Mollie there is no per-payment webhook URL to pass here.
+  let payment;
+  try {
+    payment = await createPayment({
+      orderId: order.id,
+      orderNumber: order.number,
+      amountCents: totalCents,
+      description: `V&V Collectibles ${order.number}`,
+      redirectUrl: `${site}/checkout/success?order=${order.number}`,
+    });
+  } catch (e) {
+    console.error("rabo announce error", e);
+    // The order row stays behind in PENDING_PAYMENT, which is what we want:
+    // the customer can retry and support can see the attempt.
+    return NextResponse.json(
+      { error: "De betaling kon niet gestart worden. Probeer het opnieuw." },
+      { status: 502 },
+    );
+  }
 
   await prisma.order.update({
     where: { id: order.id },
-    data: { molliePaymentId: payment.paymentId },
+    data: { paymentRef: payment.paymentId },
   });
 
   // In stub mode the payment is instantly "paid": finalize now so the order,
   // invoice and confirmation email all exist for local testing.
   if (payment.stub) {
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { paymentStatus: "PAID", status: "PROCESSING", paidAt: new Date(), paymentMethod: "stub" },
-    });
-    await ensureInvoiceForOrder(order.id).catch((e) => console.error("invoice error", e));
-    await sendOrderConfirmation(order).catch((e) => console.error("email error", e));
+    await markOrderPaid(order.id, { method: "stub" });
   }
 
   return NextResponse.json({ orderNumber: order.number, checkoutUrl: payment.checkoutUrl });

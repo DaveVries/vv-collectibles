@@ -1,12 +1,12 @@
-import fs from "fs";
-import path from "path";
 import PDFDocument from "pdfkit";
 import { prisma } from "@/lib/prisma";
 import { nextInvoiceNumber } from "@/lib/numbering";
 import { formatMoney, formatDate } from "@/lib/utils";
+import { putFile, getFile } from "@/lib/storage";
 import type { Order, OrderItem, Invoice } from "@prisma/client";
 
-const INVOICE_DIR = path.join(process.cwd(), "public", "invoices");
+/** Storage key for an invoice PDF. */
+const invoiceKey = (invoiceNumber: string) => `invoices/${invoiceNumber}.pdf`;
 
 // Company / legal details printed on every invoice. Edit to match KvK/BTW.
 const COMPANY = {
@@ -18,22 +18,22 @@ const COMPANY = {
   iban: "IBAN: NL00 BANK 0000 0000 00",
 };
 
-function ensureDir() {
-  if (!fs.existsSync(INVOICE_DIR)) fs.mkdirSync(INVOICE_DIR, { recursive: true });
-}
-
 type OrderWithItems = Order & { items: OrderItem[] };
 
-/** Render the PDF for an invoice number + order to disk; returns the relative path. */
-function renderPdf(invoiceNumber: string, order: OrderWithItems): Promise<string> {
-  ensureDir();
-  const fileName = `${invoiceNumber}.pdf`;
-  const filePath = path.join(INVOICE_DIR, fileName);
-
+/**
+ * Renders the invoice PDF into a Buffer.
+ *
+ * Deliberately never touches the filesystem: on Vercel the only writable
+ * path is /tmp, and it does not survive between invocations. Where the bytes
+ * end up is the caller's decision, via lib/storage.
+ */
+function renderPdf(invoiceNumber: string, order: OrderWithItems): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 50 });
-    const stream = fs.createWriteStream(filePath);
-    doc.pipe(stream);
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
 
     const gold = "#a9821f";
     const navy = "#0c1424";
@@ -120,8 +120,6 @@ function renderPdf(invoiceNumber: string, order: OrderWithItems): Promise<string
     });
 
     doc.end();
-    stream.on("finish", () => resolve(`/invoices/${fileName}`));
-    stream.on("error", reject);
   });
 }
 
@@ -140,7 +138,8 @@ export async function ensureInvoiceForOrder(orderId: string): Promise<Invoice> {
   if (!order) throw new Error("Order not found");
 
   const number = existing?.number ?? (await nextInvoiceNumber());
-  const pdfPath = await renderPdf(number, order);
+  const pdf = await renderPdf(number, order);
+  const pdfPath = await putFile(invoiceKey(number), pdf, "application/pdf");
 
   return prisma.invoice.upsert({
     where: { orderId },
@@ -156,26 +155,34 @@ export async function ensureInvoiceForOrder(orderId: string): Promise<Invoice> {
 }
 
 /**
- * Return the invoice PDF bytes for an order, generating the invoice and/or
- * re-rendering the file if it's missing. Robust in production where files
- * written to /public at runtime aren't served as static assets.
+ * Returns the invoice PDF bytes for an order, creating the invoice if needed.
+ *
+ * Prefers the stored copy, because that is the document actually issued to
+ * the customer — re-rendering later could produce different output if company
+ * details or order data have since changed. Only when the stored copy cannot
+ * be read does it fall back to re-rendering.
  */
 export async function getInvoicePdf(
   orderId: string,
 ): Promise<{ buffer: Buffer; number: string } | null> {
   const invoice = await ensureInvoiceForOrder(orderId);
-  const fileName = `${invoice.number}.pdf`;
-  const filePath = path.join(INVOICE_DIR, fileName);
 
-  if (!fs.existsSync(filePath)) {
-    // File gone (e.g. ephemeral disk on a fresh deploy) — re-render it.
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
-    if (!order) return null;
-    await renderPdf(invoice.number, order);
+  if (invoice.pdfPath) {
+    const stored = await getFile(invoice.pdfPath);
+    if (stored) return { buffer: stored, number: invoice.number };
   }
 
-  return { buffer: fs.readFileSync(filePath), number: invoice.number };
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
+  if (!order) return null;
+
+  const pdf = await renderPdf(invoice.number, order);
+
+  // Re-store it so the next request hits the stored copy again.
+  const pdfPath = await putFile(invoiceKey(invoice.number), pdf, "application/pdf");
+  await prisma.invoice.update({ where: { id: invoice.id }, data: { pdfPath } }).catch(() => {});
+
+  return { buffer: pdf, number: invoice.number };
 }
