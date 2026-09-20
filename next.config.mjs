@@ -8,7 +8,7 @@ const nextConfig = {
   },
   // pdfkit ships its own font data files; keep it external on the server bundle.
   experimental: {
-    serverComponentsExternalPackages: ["pdfkit", "@mollie/api-client"],
+    serverComponentsExternalPackages: ["pdfkit"],
   },
 };
 
