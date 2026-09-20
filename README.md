@@ -52,6 +52,7 @@ flow is testable locally:
 | Integration | Env var(s) | Stub behavior |
 |---|---|---|
 | Rabo OnlineKassa | `RABO_REFRESH_TOKEN` + `RABO_SIGNING_KEY` | checkout auto-"pays", order → PROCESSING |
+| Vercel Blob | `BLOB_READ_WRITE_TOKEN` | invoices + uploads written to `public/` on local disk |
 | PostNL | `POSTNL_API_KEY` + customer codes | label returns a placeholder barcode |
 | Resend | `RESEND_API_KEY` | emails logged to console |
 
