@@ -32,12 +32,12 @@ const BASE_URL = "https://api.postnl.nl"; // production; use api-sandbox.postnl.
 
 function shipFrom() {
   return {
-    Name: process.env.SHIP_FROM_NAME ?? "V&V Collectibles",
+    Name: process.env.SHIP_FROM_NAME || "V&V Collectibles",
     Street: process.env.SHIP_FROM_STREET ?? "",
     HouseNr: process.env.SHIP_FROM_HOUSENR ?? "",
     Zipcode: (process.env.SHIP_FROM_ZIP ?? "").replace(/\s/g, ""),
     City: process.env.SHIP_FROM_CITY ?? "",
-    Countrycode: process.env.SHIP_FROM_COUNTRY ?? "NL",
+    Countrycode: process.env.SHIP_FROM_COUNTRY || "NL",
   };
 }
 

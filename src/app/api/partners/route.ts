@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 
   // Notify the shop owner of the new application.
   await sendEmail({
-    to: process.env.EMAIL_FROM ?? "orders@vvcollectibles.nl",
+    to: process.env.EMAIL_FROM || "orders@vvcollectibles.nl",
     subject: `Nieuwe partneraanvraag: ${partner.companyName}`,
     html: `<p>${partner.companyName} (${partner.contactName}, ${partner.email}) wil partner worden.</p>
       <p>${partner.message ?? ""}</p>`,

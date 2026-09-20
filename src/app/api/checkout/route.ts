@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     },
   });
 
-  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const site = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
   // Rabo's notification URL is configured once in the dashboard, so unlike
   // Mollie there is no per-payment webhook URL to pass here.
