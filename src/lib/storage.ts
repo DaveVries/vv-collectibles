@@ -48,6 +48,15 @@ export async function putFile(
     return blob.url;
   }
 
+  // On Vercel the disk fallback cannot work — fail with a message that says
+  // why, rather than a bare EROFS from deep inside fs.
+  if (process.env.VERCEL) {
+    throw new Error(
+      `Cannot store "${key}": BLOB_READ_WRITE_TOKEN is not set, and Vercel's ` +
+        "filesystem is read-only. Connect a Blob store to this project.",
+    );
+  }
+
   const filePath = path.join(PUBLIC_DIR, key);
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   await fs.promises.writeFile(filePath, body);
