@@ -13,13 +13,13 @@
     "db:seed-dbfw": "tsx prisma/seed-dbfw.ts",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts"
+    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "test:rabo": "tsx scripts/verify-rabo-signatures.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@mollie/api-client": "^4.3.2",
     "@prisma/client": "^5.13.0",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",

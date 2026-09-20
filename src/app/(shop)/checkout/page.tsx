@@ -119,8 +119,8 @@ export default function CheckoutPage() {
           <section className="card p-6">
             <h2 className="mb-2 text-lg font-semibold">Betaling</h2>
             <p className="text-sm text-navy/60">
-              Je wordt na het plaatsen doorgestuurd naar de beveiligde betaalpagina (Mollie):
-              iDEAL, Bancontact, PayPal, Belfius, KBC/CBC, Trustly of bankoverschrijving.
+              Je wordt na het plaatsen doorgestuurd naar de beveiligde betaalpagina van
+              Rabo OnlineKassa: iDEAL | Wero, creditcard, Bancontact of PayPal.
             </p>
           </section>
 
