@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { VVLogo } from "@/components/Logo";
 
+/** What Rabo OnlineKassa's hosted payment page actually offers. */
 const PAYMENT_METHODS = [
   "iDEAL",
+  "Wero",
+  "Creditcard",
   "Bancontact",
   "PayPal",
-  "Belfius",
-  "KBC/CBC",
-  "Trustly",
-  "Bankoverschrijving",
 ];
 
 export function Footer() {
