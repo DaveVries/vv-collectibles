@@ -26,6 +26,8 @@ export function GET() {
       blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
       raboRefreshToken: Boolean(process.env.RABO_REFRESH_TOKEN),
       raboSigningKey: Boolean(process.env.RABO_SIGNING_KEY),
+      resend: Boolean(process.env.RESEND_API_KEY),
+      emailFrom: Boolean(process.env.EMAIL_FROM),
     },
   });
 }

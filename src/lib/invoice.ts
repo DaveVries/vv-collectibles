@@ -12,7 +12,7 @@ const invoiceKey = (invoiceNumber: string) => `invoices/${invoiceNumber}.pdf`;
 const COMPANY = {
   name: "V&V Collectibles",
   addressLines: ["Voorbeeldstraat 1", "1234 AB Amsterdam", "Nederland"],
-  email: "orders@vvcollectibles.nl",
+  email: "orders@vvcollectibles.com",
   kvk: "KvK: 00000000",
   btw: "BTW: NL000000000B00",
   iban: "IBAN: NL00 BANK 0000 0000 00",
