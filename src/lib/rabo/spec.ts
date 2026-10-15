@@ -70,8 +70,14 @@ export const SIGNATURE_FIELDS = {
     "description",
     "merchantReturnURL",
   ],
-  /** Body announceOrder sends back. */
-  announceResponse: ["redirectUrl", "omnikassaOrderId"],
+  /**
+   * Body announceOrder sends back.
+   *
+   * Only redirectUrl. Verified against the official PHP SDK, where
+   * MerchantOrderResponse::getSignatureData() returns [$this->redirectUrl]
+   * — omnikassaOrderId travels in the body but is NOT signed.
+   */
+  announceResponse: ["redirectUrl"],
   /** Query params on the customer's return to merchantReturnURL. */
   returnParams: ["order_id", "status"],
   /** Body of the webhook notification POST. */
