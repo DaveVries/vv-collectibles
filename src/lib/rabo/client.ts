@@ -1,5 +1,5 @@
 import { BASE_URL, PATHS, MAX_AMOUNT_CENTS, SIGNATURE_FIELDS, type RaboOrderStatus } from "./spec";
-import { sign, signValues, signaturesMatch } from "./signature";
+import { sign, signValues, signaturesMatch, type KeyMode } from "./signature";
 
 /**
  * Thin HTTP client for the Rabo OnlineKassa API.
@@ -144,34 +144,48 @@ export async function announceOrder(args: AnnounceArgs): Promise<AnnounceResult>
 
 
 /**
- * Works out which field ordering Rabo actually signed, and says so.
+ * Works out how Rabo actually signed the response, and says so.
  *
- * Public documentation and the PHP SDK disagree with the live API about the
- * announce response, and each wrong guess costs a deploy cycle. Rather than
- * guess again, try every plausible ordering against the real signing key and
- * report which one matches.
+ * Both the field ordering and the key handling are in question. The ordering
+ * came from the official PHP SDK and does not match the live API; the key
+ * handling (base64-decode the dashboard value) is documented but unproven,
+ * because Rabo appears not to verify our request signatures — so a wrong key
+ * stays invisible until a response fails to verify, which is exactly the
+ * symptom here.
  *
- * Runs only on an already-failed verification, so it costs nothing normally.
- * It logs no secret: the signing key never leaves the HMAC, and the response
- * fields are a redirect URL and an order id that the customer sees anyway.
+ * Tries every combination of the two and names what matched. Runs only after
+ * a verification has already failed, so it costs nothing normally, and logs
+ * no secret: the key never leaves the HMAC, and the fields are a redirect URL
+ * and an order id the customer sees anyway.
  */
 function describeSignatureMismatch(result: Record<string, unknown>): string {
-  const candidates: Record<string, string[]> = {
+  const orderings: Record<string, string[]> = {
     "[redirectUrl]": ["redirectUrl"],
     "[redirectUrl, omnikassaOrderId]": ["redirectUrl", "omnikassaOrderId"],
     "[omnikassaOrderId, redirectUrl]": ["omnikassaOrderId", "redirectUrl"],
     "[omnikassaOrderId]": ["omnikassaOrderId"],
   };
+  const modes: KeyMode[] = ["base64", "raw"];
 
-  const matched = Object.entries(candidates)
-    .filter(([, fields]) => signaturesMatch(sign(result, fields), result.signature))
-    .map(([label]) => label);
+  const matches: string[] = [];
+  for (const mode of modes) {
+    for (const [label, fields] of Object.entries(orderings)) {
+      if (signaturesMatch(sign(result, fields, mode), result.signature)) {
+        matches.push(`${label} with the ${mode} key`);
+      }
+    }
+  }
 
   const keys = Object.keys(result).join(", ");
-  return matched.length
-    ? `Rabo signed ${matched.join(" or ")} — set SIGNATURE_FIELDS.announceResponse to that. Response keys: ${keys}.`
-    : `No candidate ordering matched. Response keys: ${keys}. ` +
-        "If the key list contains a field not tried above, it is probably part of the signature.";
+  if (matches.length) {
+    return `Rabo signed ${matches.join(" or ")}. Response keys: ${keys}.`;
+  }
+  return (
+    `No combination of ordering and key handling matched. Response keys: ${keys}. ` +
+    `redirectUrl length=${String(result.redirectUrl ?? "").length}, ` +
+    `signature length=${String(result.signature ?? "").length}. ` +
+    "If a key above is unexpected, it is probably part of the signature."
+  );
 }
 
 /* ------------------------------ order results ----------------------------- */

@@ -10,10 +10,19 @@ import { SIGNATURE_ALGORITHM, SIGNATURE_SEPARATOR } from "./spec";
  * concatenated field *values* that get hashed, never the JSON.
  */
 
-function signingKey(): Buffer {
+/**
+ * How the dashboard key is turned into HMAC key bytes.
+ *
+ * "base64" is the documented handling. "raw" exists because that is only
+ * documented, not proven: if Rabo does not verify our request signatures,
+ * a wrong key is invisible until a response fails to verify.
+ */
+export type KeyMode = "base64" | "raw";
+
+function signingKey(mode: KeyMode = "base64"): Buffer {
   const raw = process.env.RABO_SIGNING_KEY;
   if (!raw) throw new Error("RABO_SIGNING_KEY is not set");
-  return Buffer.from(raw, "base64");
+  return mode === "raw" ? Buffer.from(raw, "utf8") : Buffer.from(raw, "base64");
 }
 
 /** Reads a possibly-nested field ("amount.currency") off an object. */
@@ -41,8 +50,12 @@ export function signatureBase(source: unknown, fields: readonly string[]): strin
 }
 
 /** Signs an ordered field list, returning lowercase hex. */
-export function sign(source: unknown, fields: readonly string[]): string {
-  return createHmac(SIGNATURE_ALGORITHM, signingKey())
+export function sign(
+  source: unknown,
+  fields: readonly string[],
+  mode: KeyMode = "base64",
+): string {
+  return createHmac(SIGNATURE_ALGORITHM, signingKey(mode))
     .update(signatureBase(source, fields), "utf8")
     .digest("hex");
 }
@@ -65,8 +78,8 @@ export function signValues(values: readonly unknown[]): string {
 }
 
 /** Signs an already-assembled base string. Used where results are concatenated. */
-export function signRaw(base: string): string {
-  return createHmac(SIGNATURE_ALGORITHM, signingKey()).update(base, "utf8").digest("hex");
+export function signRaw(base: string, mode: KeyMode = "base64"): string {
+  return createHmac(SIGNATURE_ALGORITHM, signingKey(mode)).update(base, "utf8").digest("hex");
 }
 
 /**
