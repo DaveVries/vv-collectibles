@@ -133,10 +133,22 @@ export async function announceOrder(args: AnnounceArgs): Promise<AnnounceResult>
   if (!result.redirectUrl || !result.omnikassaOrderId) {
     throw new Error("Rabo order announce response was missing redirectUrl or omnikassaOrderId");
   }
-  if (!signaturesMatch(sign(result, SIGNATURE_FIELDS.announceResponse), result.signature)) {
-    throw new Error(
-      `Rabo order announce response had an invalid signature. ${describeSignatureMismatch(result)}`,
-    );
+  // The live API does not sign this response: it comes back with redirectUrl
+  // and omnikassaOrderId and nothing else. The PHP SDK still models a
+  // signature here, so the SDK is ahead of or behind the deployed API.
+  //
+  // Verify when one is present, and accept its absence. There is no security
+  // lost by not checking a signature that was never sent: this is the reply
+  // to our own HTTPS request, authenticated with a bearer token, so the
+  // channel is already trusted. The webhook is the opposite case — an
+  // unauthenticated inbound POST where the signature is the only protection
+  // — and that one stays mandatory.
+  if (result.signature) {
+    if (!signaturesMatch(sign(result, SIGNATURE_FIELDS.announceResponse), result.signature)) {
+      throw new Error(
+        `Rabo order announce response had an invalid signature. ${describeSignatureMismatch(result)}`,
+      );
+    }
   }
 
   return { omnikassaOrderId: result.omnikassaOrderId, redirectUrl: result.redirectUrl };
