@@ -37,10 +37,16 @@ export async function POST(req: Request) {
   }
 
   for (const result of results) {
-    // merchantOrderId is our own order number (set when announcing).
-    const order = await prisma.order.findUnique({
-      where: { number: result.merchantOrderId },
-    });
+    // merchantOrderId is our order number with separators stripped, so it
+    // does not equal `number` — match on what we stored when announcing.
+    // Falls back to `number` for orders announced before that column existed.
+    const order =
+      (await prisma.order.findFirst({
+        where: { paymentMerchantRef: result.merchantOrderId },
+      })) ??
+      (await prisma.order.findUnique({
+        where: { number: result.merchantOrderId },
+      }));
     if (!order) {
       console.warn("rabo: unknown merchantOrderId", result.merchantOrderId);
       continue;

@@ -1,9 +1,10 @@
-import { SIGNATURE_FIELDS, type RaboOrderStatus } from "./spec";
+import { SIGNATURE_FIELDS, toMerchantOrderId, type RaboOrderStatus } from "./spec";
 import { verify } from "./signature";
 import { announceOrder, isStub } from "./client";
 
 export { isStub, fetchAllOrderResults, type OrderResult } from "./client";
 export type { RaboOrderStatus } from "./spec";
+export { toMerchantOrderId } from "./spec";
 
 /**
  * Rabo OnlineKassa (Rabo Smart Pay / OmniKassa 2.0) wrapper.
@@ -54,6 +55,12 @@ export type CreatePaymentResult = {
   paymentId: string;
   checkoutUrl: string;
   stub: boolean;
+  /**
+   * The merchantOrderId actually sent to Rabo. It is the order number with
+   * the separators stripped, so it is NOT equal to order.number — the caller
+   * must persist it, because it is what comes back on the webhook.
+   */
+  merchantOrderId: string;
 };
 
 /**
@@ -63,18 +70,21 @@ export type CreatePaymentResult = {
  * is configured once in the Rabo dashboard, not per payment.
  */
 export async function createPayment(args: CreatePaymentArgs): Promise<CreatePaymentResult> {
+  const merchantOrderId = toMerchantOrderId(args.orderNumber);
+
   if (isStub()) {
     return {
       paymentId: `stub_${args.orderId}`,
       checkoutUrl: args.redirectUrl,
       stub: true,
+      merchantOrderId,
     };
   }
 
   const announced = await announceOrder({
-    // Rabo echoes merchantOrderId back on the webhook; our order number is
-    // the natural key to match on.
-    merchantOrderId: args.orderNumber,
+    // Rabo echoes this back on the webhook. It cannot be order.number
+    // directly: only alphanumeric characters are accepted.
+    merchantOrderId,
     amountCents: args.amountCents,
     currency: args.currency ?? "EUR",
     description: args.description,
@@ -85,6 +95,7 @@ export async function createPayment(args: CreatePaymentArgs): Promise<CreatePaym
     paymentId: announced.omnikassaOrderId,
     checkoutUrl: announced.redirectUrl,
     stub: false,
+    merchantOrderId,
   };
 }
 

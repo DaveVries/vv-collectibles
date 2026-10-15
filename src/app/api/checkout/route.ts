@@ -136,7 +136,7 @@ export async function POST(req: Request) {
 
   await prisma.order.update({
     where: { id: order.id },
-    data: { paymentRef: payment.paymentId },
+    data: { paymentRef: payment.paymentId, paymentMerchantRef: payment.merchantOrderId },
   });
 
   // In stub mode the payment is instantly "paid": finalize now so the order,

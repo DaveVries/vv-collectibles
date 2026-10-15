@@ -176,11 +176,15 @@ model Order {
 
   channel OrderChannel @default(WEBSHOP)
 
-  status        OrderStatus   @default(PENDING_PAYMENT)
-  paymentStatus PaymentStatus @default(OPEN)
-  paymentMethod String?
+  status             OrderStatus   @default(PENDING_PAYMENT)
+  paymentStatus      PaymentStatus @default(OPEN)
+  paymentMethod      String?
   /// Rabo OnlineKassa omnikassaOrderId (or "stub_..." when running without credentials).
-  paymentRef    String?
+  paymentRef         String?
+  /// The merchantOrderId sent to Rabo: `number` with separators stripped,
+  /// because Rabo accepts alphanumerics only. This is what the webhook
+  /// echoes back, so it is the key we match incoming results on.
+  paymentMerchantRef String?
 
   // customer
   customerName  String
@@ -223,6 +227,7 @@ model Order {
 
   @@index([status])
   @@index([paymentRef])
+  @@index([paymentMerchantRef])
   @@index([createdAt])
 }
 

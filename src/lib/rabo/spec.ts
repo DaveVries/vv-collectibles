@@ -122,5 +122,16 @@ export const PAYMENT_BRANDS = [
   "V_PAY",
 ] as const;
 
+/**
+ * merchantOrderId accepts alphanumeric characters only.
+ *
+ * Anything else is rejected at announce time with HTTP 422 and errorCode
+ * 5017 ("Validation Error"). Our order numbers look like VV-2026-0001, so
+ * the separators have to come out before the value is sent.
+ */
+export function toMerchantOrderId(orderNumber: string): string {
+  return orderNumber.replace(/[^a-zA-Z0-9]/g, "");
+}
+
 /** Rabo rejects announces above this amount (in cents). */
 export const MAX_AMOUNT_CENTS = 9_999_999;
