@@ -47,6 +47,23 @@ export function sign(source: unknown, fields: readonly string[]): string {
     .digest("hex");
 }
 
+/**
+ * Joins an already-ordered list of values the way Rabo expects: each value
+ * stringified, then joined with SIGNATURE_SEPARATOR.
+ *
+ * Used where the signed data is not a flat field list — the order-results
+ * response nests a variable number of results, each with a variable number
+ * of transactions, and the SDK flattens the whole structure before joining.
+ */
+export function joinValues(values: readonly unknown[]): string {
+  return values.map(toSignatureValue).join(SIGNATURE_SEPARATOR);
+}
+
+/** Signs a pre-built, already-ordered value list. */
+export function signValues(values: readonly unknown[]): string {
+  return signRaw(joinValues(values));
+}
+
 /** Signs an already-assembled base string. Used where results are concatenated. */
 export function signRaw(base: string): string {
   return createHmac(SIGNATURE_ALGORITHM, signingKey()).update(base, "utf8").digest("hex");

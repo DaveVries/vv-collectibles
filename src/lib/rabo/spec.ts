@@ -82,21 +82,10 @@ export const SIGNATURE_FIELDS = {
   returnParams: ["order_id", "status"],
   /** Body of the webhook notification POST. */
   notification: ["authentication", "expiry", "eventName", "poiId"],
-  /** Body of the orderResults response (order fields joined per result). */
-  orderResults: ["moreOrderResultsAvailable"],
-  /** Fields of each individual result inside an orderResults response. */
-  orderResultItem: [
-    "merchantOrderId",
-    "omnikassaOrderId",
-    "poiId",
-    "orderStatus",
-    "orderStatusDateTime",
-    "errorCode",
-    "paidAmount.currency",
-    "paidAmount.amount",
-    "totalAmount.currency",
-    "totalAmount.amount",
-  ],
+  // The order-results response is NOT a flat field list: it nests a variable
+  // number of results, each with a variable number of transactions. Its value
+  // list is built structurally in client.ts (orderResultValues), mirroring
+  // MerchantOrderResult::getSignatureData() in the official SDK.
 } as const;
 
 /**

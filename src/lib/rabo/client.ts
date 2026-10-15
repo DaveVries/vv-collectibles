@@ -1,5 +1,5 @@
 import { BASE_URL, PATHS, MAX_AMOUNT_CENTS, SIGNATURE_FIELDS, type RaboOrderStatus } from "./spec";
-import { sign, signRaw, signaturesMatch, signatureBase } from "./signature";
+import { sign, signValues, signaturesMatch } from "./signature";
 
 /**
  * Thin HTTP client for the Rabo OnlineKassa API.
@@ -142,15 +142,69 @@ export async function announceOrder(args: AnnounceArgs): Promise<AnnounceResult>
 
 /* ------------------------------ order results ----------------------------- */
 
+type Money = { currency?: string; amount?: number };
+
+type TransactionInfo = {
+  id?: string;
+  paymentBrand?: string;
+  type?: string;
+  status?: string;
+  amount?: Money;
+  confirmedAmount?: Money;
+  startTime?: string;
+  lastUpdateTime?: string;
+};
+
 export type OrderResult = {
   merchantOrderId: string;
   omnikassaOrderId: string;
+  poiId?: string | number;
   orderStatus: RaboOrderStatus;
   orderStatusDateTime?: string;
   errorCode?: string;
-  paidAmount?: { currency: string; amount: number };
-  totalAmount?: { currency: string; amount: number };
+  paidAmount?: Money;
+  totalAmount?: Money;
+  transactionInfo?: TransactionInfo[];
 };
+
+/** A Money contributes two slots, currency then amount, even when absent. */
+function moneyValues(m: Money | undefined): unknown[] {
+  return [m?.currency ?? null, m?.amount ?? null];
+}
+
+/**
+ * The signed value list for one order result, mirroring
+ * MerchantOrderResult::getSignatureData() in the official PHP SDK: the fixed
+ * fields, the two amounts, then every transaction appended in array order.
+ *
+ * The transactions matter — a completed order carries at least one, and
+ * leaving them out makes the signature fail on exactly the payments that
+ * succeeded.
+ */
+function orderResultValues(r: OrderResult): unknown[] {
+  return [
+    r.merchantOrderId,
+    r.omnikassaOrderId,
+    r.poiId,
+    r.orderStatus,
+    r.orderStatusDateTime,
+    r.errorCode,
+    ...moneyValues(r.paidAmount),
+    ...moneyValues(r.totalAmount),
+    ...(r.transactionInfo ?? []).flatMap((t) => [
+      t.id,
+      t.paymentBrand,
+      t.type,
+      t.status,
+      ...moneyValues(t.amount),
+      // Absent confirmedAmount still occupies both slots: the SDK
+      // substitutes [null, null] rather than skipping it.
+      ...moneyValues(t.confirmedAmount),
+      t.startTime,
+      t.lastUpdateTime,
+    ]),
+  ];
+}
 
 /**
  * Fetches one page of finished order results using the token handed to us by
@@ -181,12 +235,15 @@ export async function fetchOrderResults(
 
   const results = body.orderResults ?? [];
 
-  const base = [
-    signatureBase(body, SIGNATURE_FIELDS.orderResults),
-    ...results.map((r) => signatureBase(r, SIGNATURE_FIELDS.orderResultItem)),
-  ].join("");
+  // moreOrderResultsAvailable is signed as the literal "true"/"false",
+  // followed by every result's values, the whole lot flattened and joined
+  // with the same separator as everything else.
+  const values = [
+    body.moreOrderResultsAvailable ? "true" : "false",
+    ...results.flatMap(orderResultValues),
+  ];
 
-  if (!signaturesMatch(signRaw(base), body.signature)) {
+  if (!signaturesMatch(signValues(values), body.signature)) {
     throw new Error("Rabo order-results response had an invalid signature");
   }
 
