@@ -134,10 +134,44 @@ export async function announceOrder(args: AnnounceArgs): Promise<AnnounceResult>
     throw new Error("Rabo order announce response was missing redirectUrl or omnikassaOrderId");
   }
   if (!signaturesMatch(sign(result, SIGNATURE_FIELDS.announceResponse), result.signature)) {
-    throw new Error("Rabo order announce response had an invalid signature");
+    throw new Error(
+      `Rabo order announce response had an invalid signature. ${describeSignatureMismatch(result)}`,
+    );
   }
 
   return { omnikassaOrderId: result.omnikassaOrderId, redirectUrl: result.redirectUrl };
+}
+
+
+/**
+ * Works out which field ordering Rabo actually signed, and says so.
+ *
+ * Public documentation and the PHP SDK disagree with the live API about the
+ * announce response, and each wrong guess costs a deploy cycle. Rather than
+ * guess again, try every plausible ordering against the real signing key and
+ * report which one matches.
+ *
+ * Runs only on an already-failed verification, so it costs nothing normally.
+ * It logs no secret: the signing key never leaves the HMAC, and the response
+ * fields are a redirect URL and an order id that the customer sees anyway.
+ */
+function describeSignatureMismatch(result: Record<string, unknown>): string {
+  const candidates: Record<string, string[]> = {
+    "[redirectUrl]": ["redirectUrl"],
+    "[redirectUrl, omnikassaOrderId]": ["redirectUrl", "omnikassaOrderId"],
+    "[omnikassaOrderId, redirectUrl]": ["omnikassaOrderId", "redirectUrl"],
+    "[omnikassaOrderId]": ["omnikassaOrderId"],
+  };
+
+  const matched = Object.entries(candidates)
+    .filter(([, fields]) => signaturesMatch(sign(result, fields), result.signature))
+    .map(([label]) => label);
+
+  const keys = Object.keys(result).join(", ");
+  return matched.length
+    ? `Rabo signed ${matched.join(" or ")} — set SIGNATURE_FIELDS.announceResponse to that. Response keys: ${keys}.`
+    : `No candidate ordering matched. Response keys: ${keys}. ` +
+        "If the key list contains a field not tried above, it is probably part of the signature.";
 }
 
 /* ------------------------------ order results ----------------------------- */
