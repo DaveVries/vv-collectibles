@@ -2,31 +2,47 @@
  * Rabo OnlineKassa (Rabo Smart Pay / OmniKassa 2.0) protocol constants.
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ VERIFY BEFORE GOING LIVE                                                │
+ * │ VERIFIED against the official PHP SDK                                   │
+ * │ (github.com/rabobank-nederland/omnikassa-php-sdk):                      │
  * │                                                                         │
- * │ Everything in this file is protocol-level detail taken from the public  │
- * │ SDK documentation. The authoritative reference is the API manual behind │
- * │ the login at https://developer.rabobank.nl/api-documentation/           │
- * │ rabo-omnikassa/2-0-16 — check each constant below against it.           │
+ * │   BASE_URL              README, v1.18.0 notes                           │
+ * │   PATHS.accessToken     ApiConnector: '%s/gatekeeper/refresh'           │
+ * │   PATHS.announceOrder   ApiConnector: '%s/order/server/api/v2/order'    │
+ * │   PATHS.orderResults    ApiConnector: '…/events/results/%s'             │
+ * │   SIGNATURE_SEPARATOR   Signable: implode(',', flatten(...))            │
+ * │   SIGNATURE_ALGORITHM   Signable: HASH_ALGORITHM = 'sha512', hex out    │
  * │                                                                         │
- * │ The two that will bite you first are BASE_URL (a wrong path gives 404)  │
- * │ and the SIGNATURE_FIELDS orders (a wrong order gives a signature        │
- * │ mismatch on every single request). Both are isolated here on purpose:   │
- * │ correcting them is a one-file change, no logic elsewhere depends on     │
- * │ the specific ordering.                                                  │
+ * │ STILL UNVERIFIED — confirm in a sandbox call before going live:         │
+ * │                                                                         │
+ * │   SIGNATURE_FIELDS      the per-message field ORDER. The separator and  │
+ * │                         algorithm are now known, but the order of each  │
+ * │                         message's fields comes from the getSignatureData│
+ * │                         implementations, which were not read. A wrong   │
+ * │                         order fails every request with a signature      │
+ * │                         mismatch, and that is the symptom to expect.    │
+ * │                                                                         │
+ * │ Everything stays isolated in this file on purpose: correcting a field   │
+ * │ order is a one-file change, nothing else depends on the ordering.       │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
-/** Sandbox vs production is driven by RABO_ENVIRONMENT (see .env.example). */
+/**
+ * Sandbox vs production is driven by RABO_ENVIRONMENT (see .env.example).
+ *
+ * Verified against the official PHP SDK README. Sandbox and production are
+ * separate hosts; the older form that distinguished them by path suffix
+ * (/omnikassa-api vs /omnikassa-api-sandbox on betalen.rabobank.nl) is
+ * listed there as incorrect.
+ */
 export const BASE_URL = {
-  sandbox: "https://betalen.rabobank.nl/omnikassa-api-sandbox",
-  production: "https://betalen.rabobank.nl/omnikassa-api",
+  sandbox: "https://api.pay-sandbox.rabobank.nl/omnikassa-api",
+  production: "https://api.pay.rabobank.nl/omnikassa-api",
 } as const;
 
 /** Paths appended to BASE_URL. */
 export const PATHS = {
   /** Exchanges the dashboard refresh token for a short-lived access token. */
-  accessToken: "/gateway/server/api/access-token",
+  accessToken: "/gatekeeper/refresh",
   /** Announces a new order; responds with the hosted-payment redirect URL. */
   announceOrder: "/order/server/api/v2/order",
   /** Pulls finished order results after a webhook notification. */
@@ -80,12 +96,11 @@ export const SIGNATURE_FIELDS = {
 /**
  * How signature fields are joined before hashing.
  *
- * The Rabobank SDK manual describes the fields as "stitched" together, which
- * reads as an empty separator. At least one widely-used community SDK joins
- * them with commas instead. Empty string is the safer default because it
- * matches the official wording — but if signatures fail, try ",".
+ * A comma, with no spaces. Verified against the official PHP SDK: Signable
+ * flattens the signature data, discarding keys, then joins it with
+ * implode(',', ...) before handing it to hash_hmac.
  */
-export const SIGNATURE_SEPARATOR = "";
+export const SIGNATURE_SEPARATOR = ",";
 
 /** HMAC algorithm. The signing key from the dashboard is base64 and is decoded before use. */
 export const SIGNATURE_ALGORITHM = "sha512";

@@ -36,6 +36,12 @@ ok("nested amount.amount resolved", base.includes("4295"));
 ok("field order: timestamp precedes merchantOrderId",
    base.indexOf("2026-09-20") < base.indexOf("VV-2026-0001"));
 
+// --- separator, verified against the official PHP SDK ---
+ok("fields are comma-joined (SDK uses implode(','))",
+   base === [announce.timestamp, announce.merchantOrderId, "EUR", "4295",
+             announce.language, announce.description, announce.merchantReturnURL].join(","));
+ok("base contains commas", base.split(",").length === 7);
+
 // --- determinism + hex shape ---
 const s1 = sign(announce, SIGNATURE_FIELDS.announceRequest);
 const s2 = sign(announce, SIGNATURE_FIELDS.announceRequest);
