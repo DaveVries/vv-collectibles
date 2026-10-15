@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { nextOrderNumber } from "@/lib/numbering";
 import { createPayment } from "@/lib/rabo";
 import { markOrderPaid } from "@/lib/order-finalize";
+import { siteUrl } from "@/lib/site";
 
 const SHIPPING_CENTS = 695;
 
@@ -110,7 +111,7 @@ export async function POST(req: Request) {
     },
   });
 
-  const site = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const site = siteUrl();
 
   // Rabo's notification URL is configured once in the dashboard, so unlike
   // Mollie there is no per-payment webhook URL to pass here.

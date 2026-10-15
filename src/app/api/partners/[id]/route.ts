@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
+import { siteUrl } from "@/lib/site";
 
 const schema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
@@ -25,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // Email the store when it gets approved.
   if (parsed.data.status === "APPROVED" && before?.status !== "APPROVED") {
-    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+    const site = siteUrl();
     await sendEmail({
       to: partner.email,
       subject: "Je bent goedgekeurd als partner — V&V Collectibles",

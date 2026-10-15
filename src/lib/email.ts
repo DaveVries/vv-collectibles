@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { siteUrl } from "@/lib/site";
 
 /**
  * Thin email helper. Without RESEND_API_KEY, emails are logged to the console
@@ -44,12 +45,12 @@ export async function sendWelcome(user: { email: string; name?: string | null })
     html: `<h2>Welkom${user.name ? `, ${user.name}` : ""}!</h2>
       <p>Je account is aangemaakt. Je kunt voortaan je bestellingen volgen in je account
       en sneller afrekenen.</p>
-      <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/account">Naar je account</a></p>`,
+      <p><a href="${siteUrl()}/account">Naar je account</a></p>`,
   });
 }
 
 export async function sendPasswordReset(email: string, token: string) {
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL}/reset?token=${token}`;
+  const url = `${siteUrl()}/reset?token=${token}`;
   return sendEmail({
     to: email,
     subject: "Wachtwoord opnieuw instellen — V&V Collectibles",
@@ -85,7 +86,7 @@ export async function sendNewProductAnnounce(
   product: { name: string; slug: string },
 ) {
   if (partnerEmails.length === 0) return { stub: true };
-  const url = `${process.env.NEXT_PUBLIC_SITE_URL}/products/${product.slug}`;
+  const url = `${siteUrl()}/products/${product.slug}`;
   return sendEmail({
     to: partnerEmails,
     subject: `Nieuw in het assortiment: ${product.name}`,
