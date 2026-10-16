@@ -5,17 +5,58 @@ import { siteUrl } from "@/lib/site";
  * Thin email helper. Without RESEND_API_KEY, emails are logged to the console
  * so order/partner flows are observable in development.
  */
-const apiKey = process.env.RESEND_API_KEY;
-const resend = apiKey ? new Resend(apiKey) : null;
-const from = process.env.EMAIL_FROM || "V&V Collectibles <orders@vvcollectibles.com>";
+/**
+ * Resolved per call, not captured at module load. A module-level constant
+ * freezes whatever the environment looked like at import time, which makes
+ * the module untestable and silently wrong in any runtime that populates
+ * env after import.
+ */
+let client: Resend | null = null;
+let clientKey: string | undefined;
+
+function getResend(): Resend | null {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null;
+  if (!client || clientKey !== apiKey) {
+    client = new Resend(apiKey);
+    clientKey = apiKey;
+  }
+  return client;
+}
+
+function sender(): string {
+  return process.env.EMAIL_FROM || "V&V Collectibles <orders@vvcollectibles.com>";
+}
 
 export async function sendEmail(opts: { to: string | string[]; subject: string; html: string }) {
+  const resend = getResend();
+  const from = sender();
+
   if (!resend) {
     console.log("[email:stub]", { to: opts.to, subject: opts.subject });
     return { stub: true };
   }
-  await resend.emails.send({ from, to: opts.to, subject: opts.subject, html: opts.html });
-  return { stub: false };
+
+  // The Resend SDK reports API failures in the returned `error` field rather
+  // than by throwing: send() resolves to { data, error }. Ignoring that field
+  // swallows every real failure — unverified domain, rejected sender, rate
+  // limit — while the caller's .catch() never fires and the code looks like
+  // it succeeded. Turn it into a throw so the existing handlers log it.
+  const { data, error } = await resend.emails.send({
+    from,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  });
+
+  if (error) {
+    throw new Error(
+      `Resend rejected the email to ${Array.isArray(opts.to) ? opts.to.join(", ") : opts.to} ` +
+        `(from ${from}): ${error.name ?? "error"} — ${error.message}`,
+    );
+  }
+
+  return { stub: false, id: data?.id };
 }
 
 export async function sendOrderConfirmation(order: {
